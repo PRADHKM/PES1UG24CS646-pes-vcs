@@ -375,10 +375,10 @@ The test program verifies:
 - Integrity checking (detects corrupted objects)
 
 **📸 Screenshot 1A:** Output of `./test_objects` showing all tests passing.
-![Phase 1A](./screenshots/page_1.png)
+![Phase 1A](./screenshots/phase_1A_test_objects.png)
 
 **📸 Screenshot 1B:** `find .pes/objects -type f` showing the sharded directory structure.
-![Phase 1B](./screenshots/page_1.png)
+![Phase 1B](./screenshots/phase_1B_find_objects.png)
 
 ---
 
@@ -409,10 +409,10 @@ The test program verifies:
 - Deterministic serialization (same entries in any order → identical output)
 
 **📸 Screenshot 2A:** Output of `./test_tree` showing all tests passing.
-![Phase 2A](./screenshots/page_1.png)
+![Phase 2A](./screenshots/phase_2A_test_tree.png)
 
 **📸 Screenshot 2B:** Pick a tree object from `find .pes/objects -type f` and run `xxd .pes/objects/XX/YYY... | head -20` to show the raw binary format.
-*(Note: Not found in provided Doc1.pdf)*
+*(Note: Not found in provided Doc1.docx)*
 
 ---
 
@@ -469,10 +469,10 @@ cat .pes/index    # Human-readable text format
 ```
 
 **📸 Screenshot 3A:** Run `./pes init`, `./pes add file1.txt file2.txt`, `./pes status` — show the output.
-![Phase 3A](./screenshots/page_2.png)
+![Phase 3A](./screenshots/phase_3A_status.png)
 
 **📸 Screenshot 3B:** `cat .pes/index` showing the text-format index with your entries.
-![Phase 3B](./screenshots/page_2.png)
+![Phase 3B](./screenshots/phase_3B_index.png)
 
 ---
 
@@ -522,13 +522,13 @@ make test-integration
 ```
 
 **📸 Screenshot 4A:** Output of `./pes log` showing three commits with hashes, authors, timestamps, and messages.
-![Phase 4A](./screenshots/page_2.png)
+![Phase 4A](./screenshots/phase_4A_log.png)
 
 **📸 Screenshot 4B:** `find .pes -type f | sort` showing object store growth after three commits.
-![Phase 4B](./screenshots/page_3.png)
+![Phase 4B](./screenshots/phase_4B_growth.png)
 
 **📸 Screenshot 4C:** `cat .pes/refs/heads/main` and `cat .pes/HEAD` showing the reference chain.
-![Phase 4C](./screenshots/page_3.png)
+![Phase 4C](./screenshots/phase_4C_refs.png)
 
 ---
 
@@ -568,7 +568,7 @@ The following questions cover filesystem concepts beyond the implementation scop
 | 4     | 4B  | `find .pes -type f \| sort` showing object growth              |
 | 4     | 4C  | `cat .pes/refs/heads/main` and `cat .pes/HEAD`                 |
 | Final | --  | Full integration test (`make test-integration`)                 |
-![Final Integration Test](./screenshots/page_3.png)
+![Final Integration Test](./screenshots/final_integration.png)
 
 ### Code Files Required (5 files)
 
