@@ -603,63 +603,28 @@ The following questions cover filesystem concepts beyond the implementation scop
 
 ---
 
+
+---
+
 # 📝 PES-VCS Lab Report
 
 ## Phase 5: Branching and Checkout
 
-### Q5.1: Implementation of `pes checkout <branch>`
-**Concept:** A branch is an abstraction pointing to a specific commit. `checkout` is the process of synchronizing the working directory with that commit.
+### Q5.1: How to implement `pes checkout <branch>`
+To implement this, I'd update the `.pes/HEAD` file to point to the new branch ref. Then, the working directory needs to be cleared and repopulated with files from the branch's latest commit by walking its tree object. The main challenge is making sure you don't overwrite any unsaved (dirty) work or delete files that aren't part of the VCS.
 
-**Implementation Details:**
-- **Metadata Update:** The `.pes/HEAD` file must be updated to contain `ref: refs/heads/<branch>`. If the branch doesn't exist, the operation should fail.
-- **FS Synchronization:** 
-    1. The working directory must be cleared of all tracked files (those in the current index).
-    2. The tree object associated with the target branch's latest commit must be read recursively. 
-    3. Blobs must be written back to the working directory at their relative paths.
-- **Complexity:** The main complexity lies in **safety**. If the user has uncommitted changes that would be overwritten by the checkout, the system must refuse the operation to prevent data loss. Additionally, untracked files must be preserved, requiring careful distinction between tracked and "extra" files.
+### Q5.2: Detecting a "Dirty" Working Directory
+You can detect "dirty" files by comparing the current file’s SHA-256 hash with the one stored in the index. If the hash on disk doesn't match the index or the last commit, the file has been modified. Checkout should always check this first and stop if it’s about to lose the user's uncommitted data.
 
-### Q5.2: Detecting "Dirty" Working Directory Conflicts
-**Method:** Using only the index and the object store, we can perform a three-way comparison:
-1.  **Check the Index:** Compare the working directory file's `mtime` and `size` with the metadata stored in `.pes/index`. If they differ, the file is potentially modified.
-2.  **Verify Content:** Recompute the SHA-256 hash of the current working directory file.
-3.  **Compare Hashes:**
-    - If the current hash matches the hash in the index, but the index hash differs from the hash in the `HEAD` commit, the file is **staged** but not yet committed.
-    - If the current hash differs from *both* the index and the `HEAD` commit, it is **modified** (unstaged).
-**Safety Rule:** If `hash(WD) != hash(HEAD)`, the file is "dirty." If that file also differs between the current branch and the target branch, `pes checkout` must abort.
-
-### Q5.3: Detached HEAD State
-**Behavior:** In a "Detached HEAD" state, `.pes/HEAD` contains a SHA-256 hash directly instead of a `ref: refs/heads/...` string. 
-- **Commits:** You can still make commits. Each new commit's `parent` will be the previous SHA, and `HEAD` will be updated to point to the new SHA.
-- **The Risk:** Since no branch reference (like `main`) points to these new commits, they are not "anchored." If you switch back to `main`, there is no easy pointer to find those commits again.
-- **Recovery:** To recover, the user must look at the `.pes/log` (if it walks all objects) or find the specific commit hash in the object store. In Git, one would use `git reflog`, but in `pes-vcs`, you would have to manually create a branch at that hash: `echo <hash> > .pes/refs/heads/recovered-branch`.
+### Q5.3: Dealing with a Detached HEAD
+A detached HEAD happens when you point directly to a commit hash instead of a branch name. You can still make commits, but they aren't "anchored" to a branch, so they can easily get lost if you switch away. To recover them, you’d have to find the specific commit hash from the logs and manually create a new branch for it.
 
 ---
 
-## Phase 6: Garbage Collection and Space Reclamation
+## Phase 6: Garbage Collection (GC)
 
-### Q6.1: Mark-and-Sweep Algorithm
-**Algorithm Steps:**
-1.  **Mark Phase:**
-    - Create a "Reachable" set (using a Hash Table or Bitset).
-    - Start from all **Roots**: Read every file in `.pes/refs/heads/` and the hash in `.pes/HEAD`.
-    - **Recursive Traversal:** For each commit found, mark it. Parse the commit to find its `tree` and `parent`. Recursively visit the tree (marking all sub-trees and blobs it points to) and the parent commit.
-2.  **Sweep Phase:**
-    - Iterate through all directories and files in `.pes/objects/`.
-    - For each object found, check if its hash exists in the "Reachable" set.
-    - **Deletion:** If it's not reachable, delete the file.
+### Q6.1: Mark-and-Sweep Cleanup
+GC works like a cleanup crew: first, it "marks" everything that's still being used by starting from the branches and following all the links to files and folders. Then, it "sweeps" (deletes) any objects in the `.pes/objects` folder that weren't marked. For 100k commits, this is efficient because SHA-256 deduplication ensures we only ever store and visit unique files once.
 
-**Efficiency Estimation:**
-For 100,000 commits and 50 branches:
-- You visit 100,000 commit objects.
-- Each unique tree and blob in those commits is visited.
-- Because of **SHA-256 deduplication**, the number of objects to visit is exactly equal to the number of *unique* files and directory states in the repository's entire history. Unchanged files across commits are only visited once (due to caching/marking), making the operation $O(N)$ where $N$ is the total number of unique objects.
-
-### Q6.2: Concurrent GC Race Condition
-**The Race Condition:** 
-1.  **GC starts:** It scans refs and calculates that `Blob A` is unreachable (nothing points to it).
-2.  **Commit starts:** A user creates a new file that happens to have the same content as `Blob A`. The `pes add` command computes the hash, sees that `Blob A` already exists in `.pes/objects/`, and decides not to write it again (deduplication).
-3.  **GC Deletes:** Before the `pes commit` finishes writing the new commit object that points to `Blob A`, the GC process deletes `Blob A`.
-4.  **Corruption:** The new commit now points to a missing object.
-
-**Git's Solution:**
-Git uses a **grace period** (configured via `gc.pruneExpire`, default is 2 weeks). When GC runs, it only deletes "orphaned" objects that were last modified longer than 2 weeks ago. This provides a safety window ensuring that objects created by concurrent or recent uncompleted operations are not deleted.
+### Q6.2: GC Race Conditions
+It's dangerous to run GC while committing because GC might decide to delete a file just as a new commit is trying to reference it. Git prevents this with a "grace period"—it only deletes orphaned objects that are older than two weeks, allowing active operations to finish safely.
