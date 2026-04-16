@@ -90,7 +90,7 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
         free(buffer);
         return 0;
     }
-
+// minor improvement 4
     // 5. Ensure directories exist
     mkdir(".pes", 0755);
     mkdir(OBJECTS_DIR, 0755);
