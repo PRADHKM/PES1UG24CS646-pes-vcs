@@ -59,7 +59,7 @@ int object_exists(const ObjectID *id) {
 }
 
 // ─── IMPLEMENTATION ─────────────────────────────────────────────────────────
-
+// minor improvement 3
 // Write an object to the store.
 int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out) {
     const char *type_str;
