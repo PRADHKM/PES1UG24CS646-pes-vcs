@@ -56,7 +56,7 @@ int index_status(const Index *index) {
 }
 
 // ─── IMPLEMENTATION ───────────────────────────────────
-// small fix 1
+
 // Load index
 int index_load(Index *index) {
     FILE *fp = fopen(".pes/index", "r");
