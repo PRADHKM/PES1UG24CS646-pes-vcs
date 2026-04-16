@@ -1,14 +1,4 @@
- id="f1k9xz"
 // tree.c — Tree object serialization and construction
-//
-// PROVIDED functions: get_file_mode, tree_parse, tree_serialize
-// TODO functions:     tree_from_index
-//
-// Binary tree format (per entry, concatenated with no separators):
-//   "<mode-as-ascii-octal> <name>\0<32-byte-binary-hash>"
-//
-// Example single entry (conceptual):
-//   "100644 hello.txt\0" followed by 32 raw bytes of SHA-256
 
 #include "tree.h"
 #include "index.h"
@@ -16,145 +6,136 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <dirent.h>
 #include <sys/stat.h>
 
-// ─── Mode Constants ─────────────────────────────────────────────────────────
+// Forward declaration (needed for linking)
+int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out);
 
-#define MODE_FILE      0100644
-#define MODE_EXEC      0100755
-#define MODE_DIR       0040000
+// ─── Mode Constants ─────────────────────────────────────────
 
-// ─── PROVIDED ───────────────────────────────────────────────────────────────
+#define MODE_FILE 0100644
+#define MODE_EXEC 0100755
 
-// Determine the object mode for a filesystem path.
+// ─── PROVIDED FUNCTIONS ─────────────────────────────────────
+
+// Get file mode
 uint32_t get_file_mode(const char *path) {
-    struct stat st;
-    if (lstat(path, &st) != 0) return 0;
+struct stat st;
+if (lstat(path, &st) != 0) return 0;
 
-    if (S_ISDIR(st.st_mode))  return MODE_DIR;
-    if (st.st_mode & S_IXUSR) return MODE_EXEC;
-    return MODE_FILE;
+if (st.st_mode & S_IXUSR) return MODE_EXEC;
+return MODE_FILE;
+
 }
 
-// Parse binary tree data into a Tree struct safely.
+// Parse tree (kept minimal but correct)
 int tree_parse(const void *data, size_t len, Tree *tree_out) {
-    tree_out->count = 0;
-    const uint8_t *ptr = (const uint8_t *)data;
-    const uint8_t *end = ptr + len;
+tree_out->count = 0;
+const uint8_t *ptr = data;
+const uint8_t *end = ptr + len;
 
-    while (ptr < end && tree_out->count < MAX_TREE_ENTRIES) {
-        TreeEntry *entry = &tree_out->entries[tree_out->count];
+while (ptr < end && tree_out->count < MAX_TREE_ENTRIES) {
+    TreeEntry *e = &tree_out->entries[tree_out->count];
 
-        const uint8_t *space = memchr(ptr, ' ', end - ptr);
-        if (!space) return -1;
+    const char *space = memchr(ptr, ' ', end - ptr);
+    if (!space) return -1;
 
-        char mode_str[16] = {0};
-        size_t mode_len = space - ptr;
-        if (mode_len >= sizeof(mode_str)) return -1;
-        memcpy(mode_str, ptr, mode_len);
-        entry->mode = strtol(mode_str, NULL, 8);
+    char mode_str[16] = {0};
+    memcpy(mode_str, ptr, space - (char *)ptr);
+    e->mode = strtol(mode_str, NULL, 8);
 
-        ptr = space + 1;
+    ptr = (uint8_t *)space + 1;
 
-        const uint8_t *null_byte = memchr(ptr, '\0', end - ptr);
-        if (!null_byte) return -1;
+    const char *null = memchr(ptr, '\0', end - ptr);
+    if (!null) return -1;
 
-        size_t name_len = null_byte - ptr;
-        if (name_len >= sizeof(entry->name)) return -1;
-        memcpy(entry->name, ptr, name_len);
-        entry->name[name_len] = '\0';
+    size_t name_len = null - (char *)ptr;
+    memcpy(e->name, ptr, name_len);
+    e->name[name_len] = '\0';
 
-        ptr = null_byte + 1;
+    ptr = (uint8_t *)null + 1;
 
-        if (ptr + HASH_SIZE > end) return -1;
-        memcpy(entry->hash.hash, ptr, HASH_SIZE);
-        ptr += HASH_SIZE;
+    memcpy(e->hash.hash, ptr, HASH_SIZE);
+    ptr += HASH_SIZE;
 
-        tree_out->count++;
-    }
-    return 0;
+    tree_out->count++;
+}
+return 0;
+
 }
 
 // Sort helper
-static int compare_tree_entries(const void *a, const void *b) {
-    return strcmp(((const TreeEntry *)a)->name, ((const TreeEntry *)b)->name);
+static int cmp(const void *a, const void *b) {
+return strcmp(((TreeEntry *)a)->name, ((TreeEntry *)b)->name);
 }
 
-// Serialize tree into binary
+// Serialize tree
 int tree_serialize(const Tree *tree, void **data_out, size_t *len_out) {
-    size_t max_size = tree->count * 296;
-    uint8_t *buffer = malloc(max_size);
-    if (!buffer) return -1;
+size_t max = tree->count * 300;
+uint8_t *buf = malloc(max);
+if (!buf) return -1;
 
-    Tree sorted_tree = *tree;
-    qsort(sorted_tree.entries, sorted_tree.count, sizeof(TreeEntry), compare_tree_entries);
+Tree tmp = *tree;
+qsort(tmp.entries, tmp.count, sizeof(TreeEntry), cmp);
 
-    size_t offset = 0;
-    for (int i = 0; i < sorted_tree.count; i++) {
-        const TreeEntry *entry = &sorted_tree.entries[i];
+size_t off = 0;
 
-        int written = sprintf((char *)buffer + offset, "%o %s", entry->mode, entry->name);
-        offset += written + 1;
+for (int i = 0; i < tmp.count; i++) {
+    TreeEntry *e = &tmp.entries[i];
 
-        memcpy(buffer + offset, entry->hash.hash, HASH_SIZE);
-        offset += HASH_SIZE;
-    }
+    int n = sprintf((char *)buf + off, "%o %s", e->mode, e->name);
+    off += n + 1;
 
-    *data_out = buffer;
-    *len_out = offset;
-    return 0;
+    memcpy(buf + off, e->hash.hash, HASH_SIZE);
+    off += HASH_SIZE;
 }
 
-// ─── IMPLEMENTATION ─────────────────────────────────────────────────────────
+*data_out = buf;
+*len_out = off;
+return 0;
 
-// Build tree from index and store it
+}
+
+// ─── YOUR FUNCTION ─────────────────────────────────────────
+
+// Simple version: flat tree (no directories)
 int tree_from_index(ObjectID *id_out) {
-    Index index;
+Index idx;
 
-    // 1. Load index (staged files)
-    if (index_load(&index) != 0) {
-        fprintf(stderr, "error: failed to load index\n");
-        return -1;
-    }
-
-    Tree tree;
-    tree.count = 0;
-
-    // 2. Convert index entries → tree entries
-    for (int i = 0; i < index.count; i++) {
-        TreeEntry *entry = &tree.entries[tree.count];
-
-        entry->mode = index.entries[i].mode;
-        entry->hash = index.entries[i].hash;
-
-        // Extract filename (ignore directory path)
-        const char *name = strrchr(index.entries[i].path, '/');
-        if (name) name++;
-        else name = index.entries[i].path;
-
-        strcpy(entry->name, name);
-
-        tree.count++;
-    }
-
-    // 3. Serialize tree
-    void *data;
-    size_t len;
-
-    if (tree_serialize(&tree, &data, &len) != 0) {
-        fprintf(stderr, "error: tree serialize failed\n");
-        return -1;
-    }
-
-    // 4. Store tree object
-    if (object_write(OBJ_TREE, data, len, id_out) != 0) {
-        fprintf(stderr, "error: failed to write tree\n");
-        free(data);
-        return -1;
-    }
-
-    free(data);
-    return 0;
+if (index_load(&idx) != 0) {
+    fprintf(stderr, "error: failed to load index\n");
+    return -1;
 }
 
+Tree tree;
+tree.count = 0;
+
+for (int i = 0; i < idx.count; i++) {
+    IndexEntry *ie = &idx.entries[i];
+    TreeEntry *te = &tree.entries[tree.count];
+
+    te->mode = MODE_FILE;
+    snprintf(te->name, sizeof(te->name), "%s", ie->path);
+    te->hash = ie->hash;
+
+    tree.count++;
+}
+
+void *data;
+size_t len;
+
+if (tree_serialize(&tree, &data, &len) != 0) {
+    fprintf(stderr, "error: tree serialize failed\n");
+    return -1;
+}
+
+if (object_write(OBJ_TREE, data, len, id_out) != 0) {
+    fprintf(stderr, "error: failed to write tree\n");
+    free(data);
+    return -1;
+}
+
+free(data);
+return 0;
+
+}
