@@ -74,7 +74,7 @@ The test program verifies:
 ![Phase 2A](./screenshots/phase_2A_test_tree.png)
 
 **📸 Screenshot 2B:** Pick a tree object from `find .pes/objects -type f` and run `xxd .pes/objects/XX/YYY... | head -20` to show the raw binary format.
-*(Note: Not found in provided Doc1.docx)*
+![Phase 2B](./screenshots/phase_2B_xxd.png)
 
 ---
 
