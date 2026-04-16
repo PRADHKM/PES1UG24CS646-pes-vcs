@@ -45,7 +45,7 @@ void compute_hash(const void *data, size_t len, ObjectID *id_out) {
     EVP_DigestFinal_ex(ctx, id_out->hash, &hash_len);
     EVP_MD_CTX_free(ctx);
 }
-
+// minor improvement 2
 void object_path(const ObjectID *id, char *path_out, size_t path_size) {
     char hex[HASH_HEX_SIZE + 1];
     hash_to_hex(id, hex);
