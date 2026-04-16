@@ -83,7 +83,7 @@ int index_load(Index *index) {
     fclose(fp);
     return 0;
 }
-
+// small fix 2
 // Save index
 int index_save(const Index *index) {
     FILE *fp = fopen(".pes/index", "w");
