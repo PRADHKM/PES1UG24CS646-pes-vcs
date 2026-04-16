@@ -105,6 +105,8 @@ int index_save(const Index *index) {
     fclose(fp);
     return 0;
 }
+// small fix 3
+
 int index_add(Index *index, const char *path) {
     struct stat st;
 
