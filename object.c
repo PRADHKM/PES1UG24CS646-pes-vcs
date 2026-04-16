@@ -123,7 +123,7 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
 
     // 7. Atomic rename
     rename(tmp_path, path);
-
+// minor improvement 5
     free(buffer);
     return 0;
 }
